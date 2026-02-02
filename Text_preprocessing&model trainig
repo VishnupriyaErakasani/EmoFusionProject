@@ -1,0 +1,86 @@
+#clean text
+import re
+
+def clean_text(text):
+    text = str(text).lower()
+    text = re.sub(r"[^a-zA-Z0-9\s]", "", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+df["Utterance"] = df["Utterance"].apply(clean_text)
+df.head()
+
+#encode labels
+from sklearn.preprocessing import LabelEncoder
+
+label_encoder = LabelEncoder()
+df["Emotion_Label"] = label_encoder.fit_transform(df["Emotion"])
+
+print("Emotion classes:", label_encoder.classes_)
+df.head()
+
+from sklearn.feature_extraction.text import TfidfVectorizer #TF-IDF(preprocessing)
+
+X_text = df["Utterance"]
+y = df["Emotion_Label"].values
+
+tfidf = TfidfVectorizer(
+    max_features=10000,
+    ngram_range=(1, 2),
+    sublinear_tf=True
+)
+
+X_tfidf = tfidf.fit_transform(X_text)
+
+print("TF-IDF shape:", X_tfidf.shape)
+
+import numpy as np
+
+np.save("text_features.npy", X_tfidf.toarray())
+np.save("text_labels.npy", y)
+
+print("Text features and labels saved")
+# @title Text model training
+
+print("X_tfidf type:", type(X_tfidf))
+print("X_tfidf shape:", X_tfidf.shape)
+
+print("y type:", type(y))
+print("y length:", len(y))
+
+from sklearn.model_selection import train_test_split
+
+X_train_text, X_val_text, y_train_text, y_val_text = train_test_split(
+    X_tfidf,
+    y,
+    test_size=0.2,
+    random_state=42,
+    stratify=y
+)
+
+print(X_train_text.shape, X_val_text.shape)
+
+from sklearn.linear_model import LogisticRegression
+
+text_model = LogisticRegression(
+    max_iter=1000,
+    class_weight="balanced",
+    n_jobs=-1
+)
+
+text_model.fit(X_train_text, y_train_text)
+
+from sklearn.metrics import accuracy_score, classification_report
+
+y_pred_text = text_model.predict(X_val_text)
+
+print("Text Model Accuracy:", accuracy_score(y_val_text, y_pred_text))
+print(classification_report(y_val_text, y_pred_text))
+
+sample_text = ["i am really happy to see you"]
+
+sample_vec = tfidf.transform(sample_text)
+pred = text_model.predict(sample_vec)
+
+print("Predicted label:", pred[0])
+print("Predicted emotion:", label_encoder.inverse_transform(pred))
